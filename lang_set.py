@@ -1,0 +1,3 @@
+#allow ja,en
+
+lang = []
