@@ -13,6 +13,9 @@ cmd_prefix r xxx コードの登録
 cmd_prefix ur コードの登録解除
 cmd_prefix n ゲームの初期化
 
+1時間操作がない状態が続いたらインスタンスを削除する
+（5分おきにチェック？）
+
 """
 #####################################
 
@@ -22,14 +25,18 @@ with open("discord_token.txt",mode="r") as f:
 #####################################
 
 #共通
+import time
 import discord
 import asyncio
+
+import pytz
+from datetime import datetime
 
 #定数系
 from c_settings import *
 
 #言語セット
-from lang_set import lang
+import lang_set
 
 #ログ系
 from my_log import *
@@ -39,6 +46,30 @@ from my_database import DB
 
 #bot
 from my_bot import bot_init
+
+#####################################
+
+#インスタンス強制終了
+#2時間で10分おきに監視
+exit_hour = 2
+exit_interval_minute = 10
+async def force_exit():
+	global insts
+	while 1:
+		for inst in insts:
+			if insts[inst].last_run_time+exit_hour*3600<time.time():
+				#終了
+				await insts[inst].del_()
+				del insts[inst]
+				log("FORCE_EXIT",f"{inst}は{exit_hour}時間経過したので強制終了")
+			else:
+				#終了しない
+				t = insts[inst].last_run_time
+				d = datetime.fromtimestamp(t, tz=pytz.timezone('Asia/Tokyo'))
+				log("FORCE_EXIT",f"LAST RUN TIME: {d}({inst})")
+		await asyncio.sleep(exit_interval_minute*60)
+
+
 
 ############################################################################################################
 Intents = discord.Intents.default()
@@ -50,6 +81,9 @@ database = DB()
 
 #チャンネルごとのインスタンスの管理
 insts = {}
+
+#force監視
+asyncio.ensure_future(force_exit())
 
 @client.event
 async def on_ready():
@@ -81,11 +115,14 @@ async def on_message(message):
 				#コマンドに関するメッセージは削除
 				await message.delete()
 			elif arg[0]=="n":
-				if message.channel.id in insts:
-					await insts[message.channel.id].del_()
-				insts[message.channel.id] = await bot_init(client,message)
-				log("ON_MESSAGE","init")
-				#コマンドに関するメッセージは削除
+				if database.can_play(message.channel.guild.id):
+					if message.channel.id in insts:
+						await insts[message.channel.id].del_()
+					insts[message.channel.id] = await bot_init(client,message)
+					log("ON_MESSAGE","init")
+					#コマンドに関するメッセージは削除
+				else:
+					log("ON_MESSAGE","このサーバーは未登録又は期限が切れています")
 				await message.delete()
 			else:
 				if message.channel.id in insts:
@@ -96,7 +133,7 @@ async def on_message(message):
 
 @client.event
 async def on_reaction_add(reaction, user):
-	if client.user != user:
+	if client.user!=user:
 		if type(reaction.message.channel)==discord.DMChannel:
 			#embedの最後に記載されているchannel id
 			channel_id = reaction.message.embeds[0].fileds[-1]["value"]
@@ -104,7 +141,6 @@ async def on_reaction_add(reaction, user):
 				await insts[channel_id].on_reaction_add_dm(reaction,user)
 			else:
 				err("ON_REACTION_ADD","不明な行先のDM")
-
 		elif reaction.message.channel.id in insts:
 			await insts[reaction.message.channel.id].on_reaction_add(reaction,user)
 
