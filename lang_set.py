@@ -24,5 +24,9 @@ def to(lang,word):
 			"Let's find the imposter.":"imposterを探し出そう",
 			"Let's cooperate with imposter.": "imposterに協力しましょう",
 			"Let's fortunate.": "気になる人を占おう",
+			"ROLE": "役職",
+			"Role confirmation complete.": "役職の確認を完了しました",
+			"GAME START!!": "ゲームスタート！",
+			"The number of participants is too small for the role.":"役職に対して参加人数が少なすぎます",
 		}
 		return words[word]
