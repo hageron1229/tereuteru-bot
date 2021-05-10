@@ -1,1 +1,1 @@
-# 使い方はgithub pagesを見てください
+# https://bot.disyscoder.tk/
