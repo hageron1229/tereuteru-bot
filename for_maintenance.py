@@ -19,6 +19,8 @@ cmd_prefix n ゲームの初期化
 """
 #####################################
 
+BOT_STATUS_MAINTENANCE = "Under maintenance"
+
 with open("discord_token.txt",mode="r") as f:
 	token = f.read()
 
@@ -97,7 +99,7 @@ dm_address = {}
 
 @client.event
 async def on_ready():
-	st = discord.Activity(name=BOT_STATUS,type=discord.ActivityType.listening)
+	st = discord.Activity(name=BOT_STATUS_MAINTENANCE,type=discord.ActivityType.listening)
 	await client.change_presence(status=discord.Status.online,activity=st)
 	print("I'm ready.")
 

@@ -35,6 +35,8 @@ class BOT:
 		self.client = client
 		self.guild = message.channel.guild
 		self.channel = message.channel
+		self.dm_address_ins = []
+		self.available_language = ["ja","en"]
 		self.lang = "ja"
 		self.hosting = True
 		self.message = {"main":None,"sub":{}}
@@ -60,12 +62,16 @@ class BOT:
 			"next":"\U000023E9",
 			"up":"⬆️",
 			"down":"⬇️",
-			"plus":"➕",
-			"minus":"➖",
+			#"plus":"➕",
+			"plus":"🔼",
+			#"minus":"➖",
+			"minus":"🔽",
 			"angel":"😇",
+			"dice":"🎲",
 		}
 		self.emoji_alpha = ["🇦","🇧","🇨","🇩","🇪","🇫","🇬","🇭","🇮","🇯","🇰","🇱","🇲","🇳","🇴","🇵","🇶","🇷","🇸","🇹","🇺","🇻","🇼","🇽","🇾","🇿"]
 		await self.init_game()
+		self.member = {}
 
 		embed = self.create_embed(BOT_TITLE,"",[])
 		self.message["main"] = await self.channel.send(embed=embed)
@@ -76,6 +82,7 @@ class BOT:
 		await self.message["main"].add_reaction(self.emoji["down"])
 		await self.message["main"].add_reaction(self.emoji["plus"])
 		await self.message["main"].add_reaction(self.emoji["minus"])
+		await self.message["main"].add_reaction(self.emoji["dice"])
 		await self.message["main"].add_reaction(self.emoji["next"])
 
 	async def del_(self):
@@ -90,7 +97,7 @@ class BOT:
 					await self.start_game()
 				else:
 					await self.exit_func(self.channel.id)
-					await self.channel.send("ただいまメンテナンス中です。\nしばらくお待ちください。")
+					await self.channel.send(self.trans("It is currently under maintenance. Please wait for a while."))
 			elif arg[0]=="settings":
 				try:
 					self.roles[arg[1]][0] = int(arg[2])
@@ -102,12 +109,22 @@ class BOT:
 				await self.exit_func(self.channel.id)
 			elif arg[0]=="act-div":
 				await self.diviner_action()
+			elif arg[0]=="lang" and len(arg)==2:
+				if arg[1] in self.available_language:
+					self.lang = arg[1]
+					await self.reload_main()
+				await message.delete()
+
 
 	async def on_reaction_add(self,reaction,user):
 		self.last_run_time = time.time()
 		if reaction.message.author==self.client.user and user!=self.client.user:
 			if self.message["main"]==reaction.message:
-				if reaction.emoji==self.emoji["play"]:
+				if reaction.emoji==self.emoji["dice"]:
+					self.member[user.id] = await self.gf_member(user.id)
+					await self.reload_main()
+					return
+				elif reaction.emoji==self.emoji["play"]:
 					self.hosting = True
 				elif reaction.emoji==self.emoji["stop"]:
 					self.hosting = False
@@ -126,29 +143,37 @@ class BOT:
 						await self.start_game()
 					else:
 						await self.exit_func(self.channel.id)
-						await self.channel.send("ただいまメンテナンス中です。\nしばらくお待ちください。")
+						await self.channel.send(self.trans("It is currently under maintenance. Please wait for a while."))
 						return
 				await self.reload_main()
 				await reaction.remove(user)
 			elif self.imposter_check_receive and reaction.message==self.message["sub"]["check_imposter"]:
 				asyncio.ensure_future(self.vote_check_imposter(reaction,user))
-				try:
-					await reaction.remove(user)
-				except:
-					pass
+				#await reaction.remove(user)
+
 			elif reaction.message==self.message["sub"]["diviner_action"]:
 				if reaction.emoji==self.emoji["play"]:
 					await self.diviner_action()
-					self.diviner_action_reaction = (reaction,user)
+					self.diviner_action_reaction.add((reaction,user))
 				elif reaction.emoji==self.emoji["stop"]:
 					self.wait_diviner_action = set()
-					try:
-						r,u = self.diviner_action_reaction
-						await r.remove(u)
-					except:
-						pass
+					for r,u in self.diviner_action_reaction:
+						try:
+							await r.remove(u)
+						except Exception as e:
+							err(e)
+					self.diviner_action_reaction = set()
 					await reaction.remove(user)
 
+	async def on_reaction_remove(self,reaction,user):
+		if reaction.message.author==self.client.user and user!=self.client.user:
+			if self.message["main"]==reaction.message:
+				if reaction.emoji==self.emoji["dice"]:
+					if user.id in self.member:
+						del self.member[user.id]
+					await self.reload_main()
+			elif self.imposter_check_receive and reaction.message==self.message["sub"]["check_imposter"]:
+				await self.vote_check_imposter(reaction,user,delete=True)
 
 
 	async def on_reaction_add_dm(self,reaction,user):
@@ -157,19 +182,21 @@ class BOT:
 				await self.role_check_wait(reaction,user)
 			elif reaction.message in self.dm_list and self.find_assigned_role(user.id)=="lovers" and reaction.emoji==self.emoji["angel"]:
 				pair = self.find_lovers_pair(user.id)
-				await pair.send(f"恋人（{user.display_name}）が死亡しました")
+				await pair.send(f'{self.trans("lovers")}（{user.display_name}）{self.trans("dead")}')
 			elif reaction.message in self.wait_diviner_action:
 				self.wait_diviner_action.remove(reaction.message)
 				ind = self.emoji_alpha.index(reaction.emoji)
 				alpha = list(self.member.keys())[ind]
 				member = self.member[alpha]
 				if member.id in self.crewmate:
-					await user.send(f"{member.display_name}はcrewmateです")
+					await user.send(f"{member.display_name} : crewmate")
 				elif member.id in self.imposter:
-					await user.send(f"{member.display_name}はimposterです")
+					await user.send(f"{member.display_name} : imposter")
 				else:
-					await user.send(f"{member.display_name}は不明です")
+					await user.send(f"{member.display_name} : unknown")
 
+	async def on_reaction_remove_dm(self,reaction,user):
+		pass
 
 	def find_lovers_pair(self,d_id):
 		for pair in self.assigned_roles["lovers"]:
@@ -242,15 +269,21 @@ class BOT:
 		# if self.hosting: color=discord.Colour.green(); fields=[[self.trans("state"),self.trans("**RUNNING**")]]
 		# else: color=discord.Colour.red(); fields=[[self.trans("state"),self.trans("**STOPPING**")]]
 		color = discord.Colour.green()
-		fields = [[self.trans(key), "→ "+str(self.roles[key][0])+" "+self.trans(self.roles[key][1])] for key in self.roles]
+		fields = [["・"+self.trans(key), "→ "+str(self.roles[key][0])+" "+self.trans(self.roles[key][1])] for key in self.roles]
 		fields[-len(self.roles)+cursor][0] = fields[-len(self.roles)+cursor][0]+" ◀"
+		fields[-len(self.roles)][0] = f"[{self.trans('List of roles')}]\n"+fields[-len(self.roles)][0]
 		fields.extend([
 			#["game_mode",self.mode],
 			#["amu",self.amu_id],
 			#["開発","[hageron1229/teruteru-bot](https://github.com/hageron1229/teruteru-bot)"],
 		])
+		if self.member:
+			member_message = "・"+"\n・".join([self.member[m].display_name for m in self.member])
+		else:
+			member_message = "-"
+		fields += [[f"[{self.trans('List of Participants')}]",member_message]]
 		embed=self.create_embed(BOT_TITLE,"",fields,color)
-		embed.set_thumbnail(url=IMAGE["main_icon"])
+		embed.set_thumbnail(url=IMAGE["setting"])
 		await self.message["main"].edit(embed=embed)
 		#await self.message["main"].clear_reactions()
 		# 自分でスタートするからstate stoppingはとりあえずいらない
@@ -261,13 +294,15 @@ class BOT:
 		return
 		async for m in self.guild.fetch_members():
 			member = await self.gf_member(m.id)
+			print(member.status,member.display_name)
 			if member.status!="online":
 				continue
+			print(member.display_name)
 			self.changed_name.append([member,member.display_name])
 			try:
 				await member.edit(nick=nick)
-			except:
-				pass
+			except Exception as e:
+				err(e)
 
 	async def return_name(self):
 		for m, nick in self.changed_name:
@@ -278,8 +313,6 @@ class BOT:
 		self.changed_name = []
 
 	async def init_game(self):
-		#(d_id,a_name)
-		self.member = {}
 		self.imposter = {}
 		self.crewmate = {}
 		self.changed_name = []
@@ -287,41 +320,47 @@ class BOT:
 		self.night_count = 0
 		self.dm_wating_list = set()
 		self.dm_list = set()
+		self.diviner_action_reaction = set()
+		for k in self.dm_address_ins:
+			if k in self.dm_address:
+				del self.dm_address[k]
+		self.dm_address_ins = []
 
 	async def check_imposter(self):
 		await self.change_name()
 		#imposterの人を探す
-		embed = discord.Embed(title=f'[{self.trans("Imposter Check")}]',description=self.trans("Select 〇 if you are an imposter; select ✕ if you are a crewmate"),color=discord.Colour.orange())
+		check_imposter_message = "Select 〇 if you are an impostor."
+		embed = discord.Embed(title=f'[{self.trans("Imposter Check")}]',description=self.trans(check_imposter_message),color=discord.Colour.orange())
 		embed.set_image(url=IMAGE["imposter"])
 		embed.add_field(name=self.trans("voted"),value=f"0 {self.trans('people')}")
 		r = await self.channel.send(embed=embed)
 		self.imposter_check_receive = True
 		await r.add_reaction(self.emoji["maru"])
-		await r.add_reaction(self.emoji["batsu"])
+		#await r.add_reaction(self.emoji["batsu"])
 		await r.add_reaction(self.emoji["stop"])
 		self.message["sub"]["check_imposter"] = r
 
-	async def vote_check_imposter(self,reaction,user):
+	async def vote_check_imposter(self,reaction,user,delete=False):
 		if self.imposter_check_receive:
-			before_num = len(self.member)
-			if reaction.emoji==self.emoji["maru"] or reaction.emoji==self.emoji["batsu"]:
-				if user.id not in self.member:
-					self.member[user.id] = user
-				if reaction.emoji==self.emoji["maru"]:
-					if user.id in self.crewmate:
-						del self.crewmate[user.id]
-					self.imposter[user.id] = user
-				elif reaction.emoji==self.emoji["batsu"]:
+			if reaction.emoji==self.emoji["maru"]:
+				before_imposter_number = len(self.imposter)
+				if delete:
 					if user.id in self.imposter:
 						del self.imposter[user.id]
-					self.crewmate[user.id] = user
-				if before_num<len(self.member):
+				else:
+					self.imposter[user.id] = await self.gf_member(user.id)
+				if before_imposter_number!=len(self.imposter):
 					embed = self.message["sub"]["check_imposter"].embeds[0]
-					embed.set_field_at(0,name=self.trans("voted"),value=str(len(self.member))+" "+self.trans("people"))
+					embed.set_field_at(0,name=self.trans("voted"),value=str(len(self.imposter))+" "+self.trans("people"))
 					await self.message["sub"]["check_imposter"].edit(embed=embed)
 			elif reaction.emoji==self.emoji["stop"]:
 				self.imposter_check_receive = False
 				await self.delete_message("check_imposter")
+				###
+				for m in self.member:
+					if m not in self.imposter:
+						self.crewmate[m] = self.member[m]
+				###
 				await self.choose_roles()
 
 	async def start_game(self):
@@ -332,85 +371,91 @@ class BOT:
 		await self.check_imposter()
 
 	async def choose_roles(self):
-		asyncio.ensure_future(self.return_name())
+		def delete_from_stock(member):
+			def in_check(arr,value):
+				if value in arr:
+					return arr.index(value)
+				else:
+					return -1
+
+			def delete_if_in(arr,value):
+				t = in_check(arr,value)
+				if t!=-1:
+					del arr[t]
+					return True
+				else:
+					return False
+
+			delete_if_in(self.stock,member.id)
+			delete_if_in(self.stock_crewmate,member.id)
+			delete_if_in(self.stock_imposter,member.id)
+
+		def create_tasks(try_num=0):
+			self.role_check_list = set()
+			self.stock = copy.deepcopy(list(self.member.keys()))
+			self.stock_crewmate = copy.deepcopy(list(self.crewmate.keys()))
+			self.stock_imposter = copy.deepcopy(list(self.imposter.keys()))
+
+			tasks = []
+
+			if self.roles["lovers"][0]:
+				pair = self.roles["lovers"][0]
+				for i in range(pair):
+					#lovers = [self.member[k] for k in random.sample(self.stock,2)]
+					lovers = [self.member[k] for k in random.sample(self.stock,2)]
+					message = ["Lovey-dovey❤"]
+					tasks.append([lovers[0],f"{self.trans('lovers')}: {lovers[1].display_name}\n"+self.trans(random.choice(message)),IMAGE["lovers"],["angel"]])
+					tasks.append([lovers[1],f"{self.trans('lovers')}: {lovers[0].display_name}\n"+self.trans(random.choice(message)),IMAGE["lovers"],["angel"]])
+					self.assigned_roles["lovers"].append(lovers)
+					delete_from_stock(lovers[0])
+					delete_from_stock(lovers[1])
+
+			one_person_role = [
+				["teruteru",["Let's outsmart everyone!"],		self.stock_crewmate,IMAGE["teruteru"]],
+				["madmate",	["Let's find the imposter."],		self.stock_crewmate,IMAGE["madmate"]],
+				["spy",		["Let's cooperate with imposter."],	self.stock_crewmate,IMAGE["spy"]],
+				["diviner",	["Let's fortunate."],				self.stock_crewmate,IMAGE["diviner"]],
+			]
+			for role_name,message,target,image in one_person_role:
+				if self.roles[role_name][0]:
+					add_message = ""
+					if role_name=="spy":
+						add_message = "\nimposter\n→ "+"\n→ ".join([self.imposter[key].display_name for key in self.imposter])
+					num = self.roles[role_name][0]
+					for i in range(num):
+						if try_num==100:
+							return False
+						elif len(target)==0:
+							return create_tasks(try_num=try_num+1)
+						else:
+							tar = self.member[random.sample(target,1)[0]]
+						tasks.append([tar,f"{self.trans(role_name)}: {self.trans('You')}\n"+self.trans(random.choice(message))+add_message,image])
+						self.assigned_roles[role_name].append(tar)
+						delete_from_stock(tar)
+			return tasks
 
 		#プレイ可能か人数をチェック
 		need_crew = sum([self.roles[i][0] for i in ["teruteru","madmate","spy","diviner"]])
 		need_member = self.roles["lovers"][0]*2
 		if need_crew>len(self.crewmate) or need_member>len(self.member):
 			mes = "The number of participants is too small for the role."
-			await self.channel.send(self.trans(mes))
+			self.message["sub"]["lack_number"] = await self.channel.send(self.trans(mes))
 			return
 
-		self.role_check_list = set()
-		self.stock = copy.deepcopy(list(self.member.keys()))
-		self.stock_crewmate = copy.deepcopy(list(self.crewmate.keys()))
-		self.stock_imposter = copy.deepcopy(list(self.imposter.keys()))
+		tasks = create_tasks()
+		if tasks==False:
+			self.message["sub"]["cannot_start"] = await self.channel.send("人数が不足しています。\nもう一度試してください。")
+		else:
+			for task in tasks:
+				asyncio.ensure_future(self.role_check(*task))
 
-		tasks = []
-
-		if self.roles["lovers"][0]:
-			pair = self.roles["lovers"][0]
-			for i in range(pair):
-				#lovers = [self.member[k] for k in random.sample(self.stock,2)]
-				lovers = [self.member[k] for k in random.sample(self.stock,2)]
-				message = ["Lovey-dovey❤"]
-				tasks.append(self.role_check(lovers[0],f"{self.trans('lovers')}: {lovers[1].display_name}\n"+self.trans(random.choice(message)),IMAGE["lovers"],add_emoji=["angel"]))
-				tasks.append(self.role_check(lovers[1],f"{self.trans('lovers')}: {lovers[0].display_name}\n"+self.trans(random.choice(message)),IMAGE["lovers"],add_emoji=["angel"]))
-				self.assigned_roles["lovers"].append(lovers)
-				await self.delete_from_stock(lovers[0])
-				await self.delete_from_stock(lovers[1])
-
-		one_person_role = [
-			["teruteru",["Let's outsmart everyone!"],		self.stock_crewmate,IMAGE["teruteru"]],
-			["madmate",	["Let's find the imposter."],		self.stock_crewmate,IMAGE["madmate"]],
-			["spy",		["Let's cooperate with imposter."],	self.stock_crewmate,IMAGE["spy"]],
-			["diviner",	["Let's fortunate."],				self.stock_crewmate,IMAGE["diviner"]],
-		]
-		for role_name,message,target,image in one_person_role:
-			if self.roles[role_name][0]:
-				add_message = ""
-				if role_name=="spy":
-					add_message = "\nimposter\n→ "+"\n→ ".join([self.imposter[key].display_name for key in self.imposter])
-				num = self.roles[role_name][0]
-				for i in range(num):
-					try:
-						tar = self.member[random.sample(target,1)[0]]
-					except Exception as e:
-						print(e)
-						await self.channel.send("人数が不足しています。\nもう一度試してください。")
-						return
-					tasks.append(self.role_check(tar,f"{self.trans(role_name)}: {self.trans('You')}\n"+self.trans(random.choice(message))+add_message,image))
-					self.assigned_roles[role_name].append(tar)
-					await self.delete_from_stock(tar)
-		await asyncio.gather(*tasks)
-
-
-
-	async def delete_from_stock(self,member):
-		def in_check(arr,value):
-			if value in arr:
-				return arr.index(value)
-			else:
-				return -1
-
-		def delete_if_in(arr,value):
-			t = in_check(arr,value)
-			if t!=-1:
-				del arr[t]
-				return True
-			else:
-				return False
-
-		delete_if_in(self.stock,member.id)
-		delete_if_in(self.stock_crewmate,member.id)
-		delete_if_in(self.stock_imposter,member.id)
 
 	async def role_check(self,member,message,image,add_emoji=[]):
 		embed = discord.Embed(title=self.trans("ROLE"),description=message)
 		embed.set_thumbnail(url=image)
 		r = await member.send(embed=self.add_dm_footer(embed))
 		self.dm_address[r.id] = self.channel.id
+		self.dm_address_ins.append(r.id)
 		self.dm_wating_list.add(r)
 		await r.add_reaction(self.emoji["maru"])
 		for e in add_emoji:
@@ -438,7 +483,7 @@ class BOT:
 
 		#diviner
 		if self.assigned_roles["diviner"]!=[]:
-			embed = self.create_embed("占い師のアクション","占い師が行動するタイミングでボタンを押してください",[],discord.Colour.red())
+			embed = self.create_embed(self.trans("Fortune Teller's Action"),self.trans("The GM should press the button when the fortuneteller is ready to act."),[],discord.Colour.red())
 			embed.set_thumbnail(url= IMAGE["diviner"])
 			self.message["sub"]["diviner_action"] = await self.channel.send(embed=embed)
 			await self.message["sub"]["diviner_action"].add_reaction(self.emoji["play"])
@@ -453,10 +498,11 @@ class BOT:
 			description += f"{self.emoji_alpha[i]} : {self.member[key].display_name}\n"
 			i+=1
 		fields = []
-		embed = self.create_embed("占い師のアクション",description,fields,discord.Colour.orange(),True)
+		embed = self.create_embed(self.trans("Fortune Teller's Action"),description,fields,discord.Colour.orange(),True)
 		for member in tars:
 			r = await member.send(embed=self.add_dm_footer(embed))
 			self.dm_address[r.id] = self.channel.id
+			self.dm_address_ins.append(r.id)
 			self.wait_diviner_action.add(r)
 			for j in range(i):
 				await r.add_reaction(self.emoji_alpha[j])

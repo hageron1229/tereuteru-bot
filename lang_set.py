@@ -1,18 +1,18 @@
 #allow ja,en
 
 def to(lang,word):
-	if lang=="en":
-		return word
-	elif lang=="ja":
-		words = {
+	words = {
+		"en": {
+		},
+		"ja": {
 			"voted": "投票済み",
 			"people": "人",
 			"pair": "組",
 			"Imposter Check": "imposterチェック",
-			"Select 〇 if you are an imposter; select ✕ if you are a crewmate": "あなたがimposterの場合には〇を、crewmateの場合は✕を選択してください",
+			"Select 〇 if you are an impostor.": "あなたがimposterの場合には〇を選択してください",
 			"state": "ステータス",
-			"**RUNNING**": "利用可能",
-			"**STOPPING**": "停止中",
+			"RUNNING": "利用可能",
+			"STOPPING": "停止中",
 			"teruteru": "てるてる",
 			"madmate": "狂人",
 			"lovers": "恋人",
@@ -28,5 +28,16 @@ def to(lang,word):
 			"Role confirmation complete.": "役職の確認を完了しました",
 			"GAME START!!": "ゲームスタート！",
 			"The number of participants is too small for the role.":"役職に対して参加人数が少なすぎます",
+			"It is currently under maintenance. Please wait for a while.":"ただいまメンテナンス中です。しばらくお待ちください。",
+			"dead": "死亡",
+			"List of roles": "役職一覧",
+			"List of Participants": "参加者一覧",
+			"Fortune Teller's Action": "占い師のアクション",
+			"The GM should press the button when the fortuneteller is ready to act.":"占い師が行動するタイミングでGMがボタンを押してください",
 		}
-		return words[word]
+	}
+	if lang in words and word in words[lang]:
+		ans = words[lang][word]
+	else:
+		ans = word
+	return ans

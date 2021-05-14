@@ -31,7 +31,8 @@ class DB:
 		try:
 			self.exe(cmd)
 		except Exception as e:
-			print(e)
+			#print(e)
+			pass
 
 
 	def __del__(self):
@@ -65,10 +66,12 @@ class DB:
 				cur.execute(cmd)
 				boo = True
 				log("DB",f"新しいサーバーに変更")
+				res = "Activation has been completed!"
 			else:
 				#多重登録
 				boo = False
 				log("DB",f"多重登録：{activation_code},{guild_id}")
+				res = "This code has already been activated."
 		else:
 			#リストにある
 
@@ -81,9 +84,10 @@ class DB:
 			cur.execute(cmd)
 			boo = True
 			log("DB",f"{activation_code}を{guild_id}に登録しました")
+			res = "Activation has been completed!"
 		cur.close()
 		self.conn.commit()
-		return boo
+		return res
 
 	def unregister(self,guild_id,activation_code):
 		cur = self.conn.cursor()
@@ -93,15 +97,16 @@ class DB:
 		if len(ans)==0:
 			#ないよ
 			log("DB",f"登録解除失敗")
-			boo = False
+			res = "This code is not registered."
 		else:
 			cmd = f"UPDATE activation set guild_id=0 where code='{activation_code}'"
 			cur.execute(cmd)
 			boo = True
 			log("DB",f"{activation_code}を{guild_id}から解除")
+			res = "Success!"
 		cur.close()
 		self.conn.commit()
-		return boo
+		return res
 
 	def can_play(self,guild_id):
 		cur = self.conn.cursor()

@@ -104,7 +104,9 @@ async def on_ready():
 @client.event
 async def on_message(message):
 	if message.author != client.user:
-		if message.channel.guild.id==839383474544705567 and message.content.startswith(cmd_prefix+" admin "):
+		if type(message.channel)==discord.DMChannel:
+			pass
+		elif message.channel.guild.id==839383474544705567 and message.content.startswith(cmd_prefix+" admin "):
 			#管理サーバー用コマンド
 			arg = message.content.split(cmd_prefix+" admin ")[1].split()
 			if arg[0]=="maintenance" and len(arg)==2:
@@ -139,11 +141,13 @@ async def on_message(message):
 				log("ON_MESSAGE","register")
 				#コマンドに関するメッセージは削除
 				await message.delete()
+				await message.channel.send(res)
 			elif arg[0]=="ur" and len(arg)==2:
 				res = database.unregister(message.channel.guild.id,arg[1])
 				log("ON_MESSAGE","unregister")
 				#コマンドに関するメッセージは削除
 				await message.delete()
+				await message.channel.send(res)
 			elif arg[0]=="n":
 				if database.can_play(message.channel.guild.id):
 					if message.channel.id in insts:
@@ -152,6 +156,7 @@ async def on_message(message):
 					log("ON_MESSAGE","init")
 					#コマンドに関するメッセージは削除
 				else:
+					await message.channel.send("Please register your activation code.")
 					log("ON_MESSAGE","このサーバーは未登録又は期限が切れています")
 				await message.delete()
 			else:
@@ -177,6 +182,24 @@ async def on_reaction_add(reaction, user):
 		# 	print(e)
 		elif reaction.message.channel.id in insts:
 			await insts[reaction.message.channel.id].on_reaction_add(reaction,user)
+
+@client.event
+async def on_reaction_remove(reaction, user):
+	if client.user!=user:
+		if type(reaction.message.channel)==discord.DMChannel and reaction.message.id in dm_address:
+			#embedの最後に記載されているchannel id
+			#t = reaction.message.embeds[0].to_dict()["fields"][-1]["value"].replace("|","")
+			#channel_id = n_to_t(str(t))
+			channel_id = dm_address[reaction.message.id]
+			if channel_id in insts:
+				await insts[channel_id].on_reaction_remove_dm(reaction,user)
+			else:
+				err("ON_REACTION_ADD","不明な行先のDM")
+		# except Exception as e:
+		# 	print(e)
+		elif reaction.message.channel.id in insts:
+			await insts[reaction.message.channel.id].on_reaction_remove(reaction,user)
+
 
 # amu連携機能は後で
 # @client.event
