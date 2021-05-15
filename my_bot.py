@@ -282,6 +282,7 @@ class BOT:
 		else:
 			member_message = "-"
 		fields += [[f"[{self.trans('List of Participants')}]",member_message]]
+		fields += [[f'[{self.trans("How to use")}]',f'{self.emoji["up"]} : {self.trans("move up")}\n{self.emoji["down"]} : {self.trans("move down")}\n{self.emoji["plus"]} : {self.trans("increase by one person")}\n{self.emoji["minus"]} : {self.trans("reduce by one person")}\n{self.emoji["dice"]} : {self.trans("join the game")}\n{self.emoji["next"]} : {self.trans("start the game")}']]
 		embed=self.create_embed(BOT_TITLE,"",fields,color)
 		embed.set_thumbnail(url=IMAGE["setting"])
 		await self.message["main"].edit(embed=embed)
@@ -325,11 +326,13 @@ class BOT:
 			if k in self.dm_address:
 				del self.dm_address[k]
 		self.dm_address_ins = []
+		self.wait_diviner_action = set()
 
 	async def check_imposter(self):
 		await self.change_name()
 		#imposterの人を探す
-		check_imposter_message = "Select 〇 if you are an impostor."
+		#check_imposter_message = "Select 〇 if you are an impostor."
+		check_imposter_message = f'{self.emoji["maru"]} : {self.trans("Please press only if you are an imposter.")}\n{self.emoji["stop"]} : {self.trans("Please push when all imposter people have voted.")}'
 		embed = discord.Embed(title=f'[{self.trans("Imposter Check")}]',description=self.trans(check_imposter_message),color=discord.Colour.orange())
 		embed.set_image(url=IMAGE["imposter"])
 		embed.add_field(name=self.trans("voted"),value=f"0 {self.trans('people')}")
@@ -371,6 +374,7 @@ class BOT:
 		await self.check_imposter()
 
 	async def choose_roles(self):
+		self.message["sub"]["confirm_roles"] = await self.channel.send(self.trans("Waiting for confirmation on the role."))
 		def delete_from_stock(member):
 			def in_check(arr,value):
 				if value in arr:
@@ -404,8 +408,9 @@ class BOT:
 					#lovers = [self.member[k] for k in random.sample(self.stock,2)]
 					lovers = [self.member[k] for k in random.sample(self.stock,2)]
 					message = ["Lovey-dovey❤"]
-					tasks.append([lovers[0],f"{self.trans('lovers')}: {lovers[1].display_name}\n"+self.trans(random.choice(message)),IMAGE["lovers"],["angel"]])
-					tasks.append([lovers[1],f"{self.trans('lovers')}: {lovers[0].display_name}\n"+self.trans(random.choice(message)),IMAGE["lovers"],["angel"]])
+					txt = f'\n{self.emoji["maru"]} : {self.trans("Press when you are sure.")}\n{self.emoji["angel"]} : {self.trans("After the game starts, press this button to notify your opponent that you have died.")}'
+					tasks.append([lovers[0],f"{self.trans('lovers')}: {lovers[1].display_name}\n"+self.trans(random.choice(message))+txt,IMAGE["lovers"],["angel"]])
+					tasks.append([lovers[1],f"{self.trans('lovers')}: {lovers[0].display_name}\n"+self.trans(random.choice(message))+txt,IMAGE["lovers"],["angel"]])
 					self.assigned_roles["lovers"].append(lovers)
 					delete_from_stock(lovers[0])
 					delete_from_stock(lovers[1])
@@ -429,7 +434,8 @@ class BOT:
 							return create_tasks(try_num=try_num+1)
 						else:
 							tar = self.member[random.sample(target,1)[0]]
-						tasks.append([tar,f"{self.trans(role_name)}: {self.trans('You')}\n"+self.trans(random.choice(message))+add_message,image])
+						txt = f'\n{self.emoji["maru"]} : {self.trans("Press when you are sure.")}'
+						tasks.append([tar,f"{self.trans(role_name)}: {self.trans('You')}\n"+self.trans(random.choice(message))+add_message+txt,image])
 						self.assigned_roles[role_name].append(tar)
 						delete_from_stock(tar)
 			return tasks
@@ -444,7 +450,7 @@ class BOT:
 
 		tasks = create_tasks()
 		if tasks==False:
-			self.message["sub"]["cannot_start"] = await self.channel.send("人数が不足しています。\nもう一度試してください。")
+			self.message["sub"]["cannot_start"] = await self.channel.send(self.trans("Check the number of roles."))
 		else:
 			for task in tasks:
 				asyncio.ensure_future(self.role_check(*task))
@@ -479,11 +485,16 @@ class BOT:
 	async def role_check_comp(self):
 		comp = "Role confirmation complete."
 		start = "GAME START!!"
-		self.message["sub"]["confirm_roles"] = await self.channel.send(self.trans(comp)+"\n"+self.trans(start))
+		try:
+			await self.message["sub"]["confirm_roles"].edit(content=self.trans(comp)+"\n"+self.trans(start))
+		except:
+			self.message["sub"]["confirm_roles"] = await self.channel.send(self.trans(comp)+"\n"+self.trans(start))
 
 		#diviner
 		if self.assigned_roles["diviner"]!=[]:
-			embed = self.create_embed(self.trans("Fortune Teller's Action"),self.trans("The GM should press the button when the fortuneteller is ready to act."),[],discord.Colour.red())
+			description = self.trans("Only the representative should operate the system.") + "\n" + f'{self.emoji["play"]} : {self.trans("Press when the fortuneteller is about to act.")}\n{self.emoji["stop"]} : {self.trans("Press when the turn in which the fortuneteller can act ends.")}'
+			embed = self.create_embed(self.trans("Fortune Teller's Action"),description,[],discord.Colour.red())
+			#embed = self.create_embed(self.trans("Fortune Teller's Action"),txt,[],discord.Colour.red())
 			embed.set_thumbnail(url= IMAGE["diviner"])
 			self.message["sub"]["diviner_action"] = await self.channel.send(embed=embed)
 			await self.message["sub"]["diviner_action"].add_reaction(self.emoji["play"])
@@ -497,6 +508,7 @@ class BOT:
 		for key in self.member:
 			description += f"{self.emoji_alpha[i]} : {self.member[key].display_name}\n"
 			i+=1
+		description += self.trans("Select the alphabet of the player you want to divine")
 		fields = []
 		embed = self.create_embed(self.trans("Fortune Teller's Action"),description,fields,discord.Colour.orange(),True)
 		for member in tars:
