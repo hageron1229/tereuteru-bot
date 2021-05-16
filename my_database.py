@@ -5,6 +5,8 @@ import sqlite3 as sq
 from pprint import pprint
 import string
 import random
+from datetime import datetime
+import pytz
 
 class DB:
 	def __init__(self):
@@ -22,6 +24,12 @@ class DB:
 		table = "unactivation"
 		cmd = f"CREATE TABLE IF NOT EXISTS {table}(code STRING PRIMARY KEY, valid_time INTEGER)"
 		self.exe(cmd)
+
+		#used
+		table = "used"
+		cmd = f"CREATE TABLE IF NOT EXISTS {table}(code STRING PRIMARY KEY, guild_id INTEGER, unix_time INTEGER)"
+		self.exe(cmd)
+		self.show(table="used")
 
 		#メンテ
 		table = "info"
@@ -44,9 +52,15 @@ class DB:
 		self.conn.commit()
 
 	def show(self,table="activation"):
+		print(f"[table: {table}]")
 		cur = self.conn.cursor()
 		cur.execute(f"SELECT * FROM {table}")
-		pprint(cur.fetchall())
+		ans = cur.fetchall()
+		for row in ans:
+			for item in row[:-1]:
+				print(item,end="\t")
+			t = datetime.fromtimestamp(int(row[-1]), tz=pytz.timezone('Asia/Tokyo'))
+			print(t)
 		cur.close()
 
 	def register(self,guild_id,activation_code):
@@ -112,7 +126,19 @@ class DB:
 		cur = self.conn.cursor()
 		cmd = f"SELECT * from activation where guild_id='{guild_id}'"
 		cur.execute(cmd)
-		ans = cur.fetchall()
+		kouho = cur.fetchall()
+		ans = []
+		for k in kouho:
+			now = int(time.time())
+			if now>k[2]:
+				#usedに移動する
+				cmd = f"DELETE from activation where code='{k[0]}'"
+				self.exe(cmd)
+				cmd = f"INSERT into used values('{k[0]}',{k[1]},{k[2]})"
+				self.exe(cmd)
+			else:
+				ans.append(k)
+
 		if len(ans)==0:
 			log("CAN_PLAY","無理")
 			boo = False
