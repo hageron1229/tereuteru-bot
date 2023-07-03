@@ -46,8 +46,8 @@ class BOT:
 			"teruteru": [0, "people"],
 			"madmate": [0, "people"],
 			"lovers": [0, "pair"],
-			"spy": [0, "people"],
-			"diviner": [1, "people"],
+			"spy": [1, "people"],
+			"diviner": [0, "people"],
 		}
 		self.dm_address = dm_address
 		######

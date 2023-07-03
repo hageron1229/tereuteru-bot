@@ -1,4 +1,5 @@
 def log(*body):
+	print(body)
 	return
 
 
