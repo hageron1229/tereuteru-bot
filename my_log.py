@@ -1,10 +1,11 @@
 def log(*body):
 	return
-	print(body)
+
 
 def err(*body):
 	print("!ERROR!")
 	print(body)
+
 
 def t_to_n(num):
 	chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJELMNOPQRSTUVWXYZ"
@@ -16,6 +17,7 @@ def t_to_n(num):
 		if num == 0:
 			break
 	return string
+
 
 def n_to_t(string):
 	chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJELMNOPQRSTUVWXYZ"
